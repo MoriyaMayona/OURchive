@@ -1,0 +1,123 @@
+{
+  "targetPublicFolder": "public/works/reimu-birthday/",
+  "assets": [
+    {
+      "file": "reimu_shrine_morning_final.png",
+      "title": "《神社清晨的灵梦》",
+      "author": "墨团",
+      "type": "开场插画",
+      "preferredUse": [
+        "作品墙",
+        "活动详情",
+        "宣发素材",
+        "合辑封面候选"
+      ],
+      "sitePath": "/works/reimu-birthday/reimu_shrine_morning_final.png"
+    },
+    {
+      "file": "reimu_shrine_morning_sketch.png",
+      "title": "《神社清晨的灵梦》构图草稿",
+      "author": "墨团",
+      "type": "过程稿/构图草稿",
+      "preferredUse": [
+        "活动详情创作成果",
+        "活动记录馆"
+      ],
+      "sitePath": "/works/reimu-birthday/reimu_shrine_morning_sketch.png"
+    },
+    {
+      "file": "reimu_shrine_morning_lineart.png",
+      "title": "《神社清晨的灵梦》线稿",
+      "author": "墨团",
+      "type": "过程稿/线稿",
+      "preferredUse": [
+        "活动详情创作成果",
+        "活动记录馆"
+      ],
+      "sitePath": "/works/reimu-birthday/reimu_shrine_morning_lineart.png"
+    },
+    {
+      "file": "shrine_letter_weiyang.png",
+      "title": "《神社来信》",
+      "author": "未央",
+      "type": "短篇文字/信件页",
+      "preferredUse": [
+        "作品墙",
+        "活动详情",
+        "宣发素材"
+      ],
+      "sitePath": "/works/reimu-birthday/shrine_letter_weiyang.png"
+    },
+    {
+      "file": "birthday_manga_storyboard.png",
+      "title": "《生日小漫画分镜》",
+      "author": "阿璃",
+      "type": "漫画分镜",
+      "preferredUse": [
+        "作品墙",
+        "活动详情"
+      ],
+      "sitePath": "/works/reimu-birthday/birthday_manga_storyboard.png"
+    },
+    {
+      "file": "reimu_birthday_sticker_sheet.png",
+      "title": "《灵梦生日表情包》",
+      "author": "小满",
+      "type": "表情包",
+      "preferredUse": [
+        "作品墙",
+        "活动详情",
+        "宣发素材"
+      ],
+      "sitePath": "/works/reimu-birthday/reimu_birthday_sticker_sheet.png"
+    },
+    {
+      "file": "birthday_cake_by_saisenbako.png",
+      "title": "《赛钱箱旁边的生日蛋糕》",
+      "author": "青禾",
+      "type": "小插图",
+      "preferredUse": [
+        "作品墙",
+        "活动详情",
+        "宣发素材"
+      ],
+      "sitePath": "/works/reimu-birthday/birthday_cake_by_saisenbako.png"
+    },
+    {
+      "file": "gift_checklist_page.png",
+      "title": "《礼物清单》",
+      "author": "夜雀",
+      "type": "短篇栏目/清单页",
+      "preferredUse": [
+        "作品墙",
+        "活动详情",
+        "宣发素材"
+      ],
+      "sitePath": "/works/reimu-birthday/gift_checklist_page.png"
+    },
+    {
+      "file": "anthology_cover_storyboard.png",
+      "title": "《合辑封面分镜》",
+      "author": "阿璃",
+      "type": "封面分镜",
+      "preferredUse": [
+        "作品墙",
+        "活动详情",
+        "宣发素材"
+      ],
+      "sitePath": "/works/reimu-birthday/anthology_cover_storyboard.png"
+    },
+    {
+      "file": "reimu_birthday_anthology_cover.png",
+      "title": "《灵梦生日图文接力合辑》",
+      "author": "阿璃 / 群体共创",
+      "type": "合辑封面",
+      "preferredUse": [
+        "活动详情头图",
+        "活动记录馆",
+        "宣发模板"
+      ],
+      "sitePath": "/works/reimu-birthday/reimu_birthday_anthology_cover.png"
+    }
+  ]
+}
