@@ -35,7 +35,8 @@ type GeneratedPromoAsset = {
 
 function PromoContent() {
   const searchParams = useSearchParams();
-  const activity = getPromoActivity(searchParams.get("activity") || "reimu-birthday");
+  const activityFromUrl = searchParams.get("activity");
+  const activity = getPromoActivity(activityFromUrl || "reimu-birthday");
   const defaultMatchedAssets = useMemo(() => getDefaultMatchedAssets(activity), [activity]);
   const storedDraft = useSyncExternalStore(
     useCallback((onStoreChange) => subscribePromoDraft(activity.id, onStoreChange), [activity.id]),
@@ -65,11 +66,14 @@ function PromoContent() {
   );
   const visibleMatchedAssets = generatedCopy ? matchedAssets : canUseStoredDraft ? storedDraft.matchedAssets : defaultMatchedAssets;
   const visibleLayoutPlan = generatedCopy?.layoutPlan ?? (canUseStoredDraft ? storedDraft.layoutPlan : undefined);
+  const currentActivityId = activityFromUrl || activity?.id || storedDraft?.activityId || storedDraft?.activity?.id || "reimu-birthday";
+  const archiveHref = `/archive/${encodeURIComponent(currentActivityId)}`;
   const visibleDraftNotice = draftNotice || (canUseStoredDraft ? "已载入本次宣发草稿" : "");
   const editorHref = useMemo(
-    () => `/promo/editor?activity=${encodeURIComponent(activity.id)}&platform=${encodeURIComponent(platform)}&style=${encodeURIComponent(style)}`,
-    [activity.id, platform, style],
+    () => `/promo/editor?activity=${encodeURIComponent(currentActivityId)}&platform=${encodeURIComponent(platform)}&style=${encodeURIComponent(style)}`,
+    [currentActivityId, platform, style],
   );
+  const platformTemplateName = platform === "公众号" ? "图文长图" : platform === "Lofter" ? "氛围海报" : "首图 + 文案";
 
   const persistCurrentDraft = useCallback(
     (nextCopy = copy, nextAssets = visibleMatchedAssets) => {
@@ -205,7 +209,7 @@ function PromoContent() {
       <div className="mx-auto flex h-full max-w-[1480px] flex-col overflow-hidden rounded-[18px] border border-white/80 bg-white shadow-2xl shadow-slate-300/70">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5">
           <div className="flex items-center gap-3">
-            <Link href="/activity" className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-sky-100 hover:text-sky-600">
+            <Link href={archiveHref} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-sky-100 hover:text-sky-600">
               返回活动详情
             </Link>
             <Link href="/" className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-sky-100 hover:text-sky-600">
@@ -352,11 +356,13 @@ function PromoContent() {
                   <section className="rounded-[16px] bg-violet-50 p-4 text-violet-800">
                     <p className="text-sm font-bold">小记排版建议</p>
                     <p className="mt-2 text-sm leading-6">{copy.layout}</p>
+                    <p className="mt-3 text-xs font-semibold text-violet-700">进入编辑器后会默认使用：{platformTemplateName}</p>
                   </section>
                   {visibleLayoutPlan ? (
                     <section className="rounded-[16px] bg-white p-4 text-slate-700 ring-1 ring-slate-100">
                       <p className="text-sm font-bold text-slate-900">排版计划摘要</p>
                       <div className="mt-2 space-y-1 text-xs leading-5">
+                        <p>平台默认：{platformTemplateName}</p>
                         <p>模板：{visibleLayoutPlan.templateRecommendation.templateName}</p>
                         <p>标题：{visibleLayoutPlan.titlePlan.titleLines.join(" / ")}</p>
                         <p>主图：{visibleLayoutPlan.assetPlan.find((asset) => asset.role === "hero" || asset.usage === "main-visual")?.title ?? visibleLayoutPlan.assetPlan[0]?.title}</p>
@@ -390,7 +396,7 @@ function PromoContent() {
                   }}
                   className="inline-flex items-center rounded-xl bg-gradient-to-r from-[#12b7f5] to-violet-500 px-5 py-3 text-sm font-bold text-white shadow-sm shadow-sky-200 transition hover:brightness-105"
                 >
-                  点击选择模板在线编辑 →
+                  进入对应排版编辑 →
                 </Link>
               </div>
             </div>

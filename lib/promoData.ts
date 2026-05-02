@@ -191,17 +191,84 @@ export function getPromoCopy(platform: PromoPlatform, style: PromoStyle, activit
 export type PromoTemplate = {
   id: string;
   name: string;
-  category: "海报" | "公众号" | "小红书";
+  category: "首图+文案" | "海报" | "公众号";
   platform: PromoPlatform;
+  compatiblePlatforms: PromoPlatform[];
   description: string;
   imageSlots: number;
 };
 
 export const promoTemplates: PromoTemplate[] = [
-  { id: "poster-birthday", name: "海报｜红白生日贺图", category: "海报", platform: "QQ空间", description: "竖版主视觉，适合发布活动完成纪念。", imageSlots: 1 },
-  { id: "poster-collection", name: "海报｜社群接力合辑", category: "海报", platform: "Lofter", description: "多作品拼贴，突出接力与成员共创。", imageSlots: 3 },
-  { id: "wechat-review", name: "公众号｜活动回顾长图", category: "公众号", platform: "公众号", description: "结构化活动复盘，适合归档与社团推送。", imageSlots: 2 },
-  { id: "wechat-works", name: "公众号｜作品展示推送", category: "公众号", platform: "公众号", description: "作品列表优先，强调作者与素材沉淀。", imageSlots: 3 },
-  { id: "redbook-cover", name: "小红书｜首图种草卡", category: "小红书", platform: "小红书", description: "强情绪标题与首图，适合吸引点击。", imageSlots: 1 },
-  { id: "redbook-grid", name: "小红书｜九宫格封面卡", category: "小红书", platform: "小红书", description: "方形卡片，多图预览活动亮点。", imageSlots: 3 },
+  {
+    id: "qqzone-cover-post",
+    name: "QQ空间｜动态首图",
+    category: "首图+文案",
+    platform: "QQ空间",
+    compatiblePlatforms: ["QQ空间"],
+    description: "一张主图加标题，适合作为QQ空间动态首图。",
+    imageSlots: 1,
+  },
+  {
+    id: "qqzone-memory-card",
+    name: "QQ空间｜熟人回顾卡",
+    category: "首图+文案",
+    platform: "QQ空间",
+    compatiblePlatforms: ["QQ空间"],
+    description: "像群友发的活动回顾卡，强调成员一起完成的感觉。",
+    imageSlots: 3,
+  },
+  {
+    id: "xhs-title-cover",
+    name: "小红书｜强标题首图",
+    category: "首图+文案",
+    platform: "小红书",
+    compatiblePlatforms: ["小红书"],
+    description: "用一张主图和强标题吸引点击，适合小红书第一张封面。",
+    imageSlots: 1,
+  },
+  {
+    id: "xhs-scrapbook-cover",
+    name: "小红书｜手账拼贴首图",
+    category: "首图+文案",
+    platform: "小红书",
+    compatiblePlatforms: ["小红书"],
+    description: "更像手账/拼贴风首图，用少量贴纸和标签增强同好感。",
+    imageSlots: 3,
+  },
+  {
+    id: "lofter-mood-poster",
+    name: "Lofter｜氛围海报",
+    category: "海报",
+    platform: "Lofter",
+    compatiblePlatforms: ["Lofter"],
+    description: "强调主图和情绪氛围，适合同人活动纪念图。",
+    imageSlots: 1,
+  },
+  {
+    id: "lofter-work-memorial",
+    name: "Lofter｜作品纪念页",
+    category: "海报",
+    platform: "Lofter",
+    compatiblePlatforms: ["Lofter"],
+    description: "像一张同人作品纪念页，保留作品名与作者信息。",
+    imageSlots: 1,
+  },
+  {
+    id: "wechat-activity-longform",
+    name: "公众号｜活动回顾长图",
+    category: "公众号",
+    platform: "公众号",
+    compatiblePlatforms: ["公众号"],
+    description: "按活动缘起、创作过程、作品成果、经验沉淀组织，适合公众号活动复盘。",
+    imageSlots: 3,
+  },
+  {
+    id: "wechat-works-showcase",
+    name: "公众号｜作品展示推文",
+    category: "公众号",
+    platform: "公众号",
+    compatiblePlatforms: ["公众号"],
+    description: "以作品展示为主，突出作品、作者和成果沉淀。",
+    imageSlots: 4,
+  },
 ];

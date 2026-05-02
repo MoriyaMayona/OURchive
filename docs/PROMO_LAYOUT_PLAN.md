@@ -59,10 +59,9 @@
 
 模板 fallback 规则：
 
-- 小红书：`redbook-cover`，不可用时退到 `redbook-grid`。
-- 公众号：`wechat-review`，不可用时退到 `wechat-works`。
-- 海报：`poster-birthday`。
-- QQ 空间 / Lofter：`poster-collection`，不可用时退到 `poster-birthday`。
+- QQ 空间 / 小红书：`cover-copy`（首图 + 文案）。
+- 公众号：`article-longform`（图文结合长图）。
+- 海报 / Lofter：`mood-poster`（单主视觉氛围海报）。
 
 ## /promo 如何保存
 

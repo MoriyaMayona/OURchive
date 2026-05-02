@@ -32,6 +32,24 @@ type PromoResult = {
 const platformSet = new Set<PromoPlatform>(["QQ空间", "小红书", "Lofter", "公众号"]);
 const styleSet = new Set<PromoStyle>(["同好群口吻", "文艺", "活泼", "官方"]);
 
+const promoLayoutSkillRules = `
+OURchive 群小记宣发排版 Skill 摘要：
+- 群小记生成结构化 Layout Plan，前端模板负责稳定渲染，用户二次编辑后下载 PNG。
+- 只保留三类模板：cover-copy（首图 + 文案）、mood-poster（氛围海报）、article-longform（图文长图）。
+- 平台映射：QQ空间 -> cover-copy；小红书 -> cover-copy；Lofter -> mood-poster；公众号 -> article-longform。
+- cover-copy：只使用 hero 或 cover 一张主图，低透明度蒙版，标题断行，前三个 tags，可用 3:4（小红书）或 4:5（QQ空间），正文不塞进图里。
+- mood-poster：只使用一张 hero 主图，低透明度蒙版，大标题、诗性副标题、少量活动信息，不做作品缩略图拼贴。
+- article-longform：公众号长图，章节稳定为活动缘起、创作过程、作品成果、经验沉淀；图片必须和段落对应。
+- titlePlan 必须包含 rawTitle、titleLines、highlightWords、subtitle、eyebrow、titleLayout；标题必须断行，每行建议 4-12 个汉字，不超过 4 行，highlightWords 必须可被模板强调。
+- assetPlan 必须按 priority 排序并标注 role：hero、support、detail、process、cover、ending。首图/海报不使用多图拼贴，公众号按角色分配图片。
+- 小红书必须提供 xiaohongshuPlan：noteStructure、pagePlan、symbolStyle、hashtagStrategy；当前 Demo 可只渲染首图，但要给正文分页建议。
+- xiaohongshuPlan.pagePlan 中每个对象必须完整包含 page:number、pageType:string、title:string、text:string、assetIds:string[]、designNote:string，不能只返回 pageType 等缺字段对象。
+- 公众号必须提供 wechatPlan：articleStructure、longImageSections、imageTextPairing、endingModule；每个 section 要说明配图原因。
+- wechatPlan.longImageSections 中每个对象必须完整包含 order:number、sectionTitle:string、sectionSubtitle:string、text:string、assetIds:string[]、layout:string、reason:string。
+- 所有数组项都不能缺关键字段；如果某项暂时没有内容，也要返回空字符串或空数组，而不是省略字段。
+- Lofter/海报必须提供 posterPlan，composition 固定偏 image-background-title-overlay，supportingAssetIds 可以为空。
+`;
+
 function readPlatform(value?: string): PromoPlatform {
   return value && platformSet.has(value as PromoPlatform) ? (value as PromoPlatform) : "QQ空间";
 }
@@ -153,6 +171,8 @@ function buildSystemPrompt() {
   return `你是 OURchive 的群小记，负责把社群活动记录、作品素材和成员贡献整理成适合不同平台的宣发文案。你的语气像一个懂同好社群的记录员，不要写成企业宣传稿。
 你的任务不是写企业宣传稿，而是把一次社群共创活动中沉淀的活动记录、作品素材、成员贡献与群体情绪，转化为适合不同平台发布的宣发文案和排版建议。
 
+${promoLayoutSkillRules}
+
 你熟悉以下平台语气：
 
 1. QQ空间：
@@ -201,27 +221,34 @@ function buildUserPrompt(payload: GeneratePromoRequest) {
 - 正文像群友发空间回顾，强调“大家一起完成”；
 - 可以感谢认领、催稿、贴贴、围观的同好；
 - 标签不需要太多，3-5 个即可；
-- 排版建议要适合 QQ空间图文动态。
+- 排版建议要适合 QQ空间图文动态；
+- layoutPlan.templateRecommendation.templateId 必须是 "cover-copy"。
 
 如果 platform 是 小红书：
 - 标题要更抓人，有情绪张力；
 - 正文短句分段，前 2 句要吸引人；
 - 标签要明确，适合搜索；
 - 排版建议要强调首图、封面、短句、标签；
-- 可以有轻微 emoji，但不要过度。
+- 可以有轻微 emoji，但不要过度；
+- layoutPlan.templateRecommendation.templateId 必须是 "cover-copy"；
+- 必须包含 xiaohongshuPlan。
 
 如果 platform 是 Lofter：
 - 标题和正文要更有同人创作氛围；
 - 语言可以更文艺、沉浸；
 - 强调角色生日、图文接力、作品之间的呼应；
 - 不要过度营销，不要小红书口吻；
-- 标签使用同人圈常见表达。
+- 标签使用同人圈常见表达；
+- layoutPlan.templateRecommendation.templateId 必须是 "mood-poster"；
+- 必须包含 posterPlan。
 
 如果 platform 是 公众号：
 - 标题清楚，适合活动回顾；
 - 正文结构化，可以包含“活动缘起 / 创作过程 / 作品成果 / 经验沉淀”；
 - 语气正式但不要企业化；
-- 排版建议要适合公众号推送结构。
+- 排版建议要适合公众号推送结构；
+- layoutPlan.templateRecommendation.templateId 必须是 "article-longform"；
+- 必须包含 wechatPlan。
 
 活动数据：
 ${JSON.stringify(activityData, null, 2)}
@@ -242,7 +269,22 @@ ${JSON.stringify(activityData, null, 2)}
 - tags：3-8 个标签，按平台习惯调整。
 - layoutAdvice：给出具体排版建议，不要泛泛而谈。
 - matchedAssets：推荐 2-4 个最适合该平台的素材，并说明原因。每个素材包含 title、type、author、reason。
-- layoutPlan：返回结构化排版计划，包含 version、platform、layoutCategory、visualStyle、templateRecommendation、titlePlan、assetPlan、contentPlan、typographyHint、decorationHint、exportHint。小红书必须包含 xiaohongshuPlan，公众号必须包含 wechatPlan。assetPlan 要判断素材 role、priority、usage、cropHint。
+- layoutPlan：返回结构化排版计划，包含 version、platform、layoutCategory、visualStyle、templateRecommendation、titlePlan、assetPlan、contentPlan、typographyHint、decorationHint、exportHint。小红书必须包含 xiaohongshuPlan，公众号必须包含 wechatPlan，Lofter/海报必须包含 posterPlan。assetPlan 要判断素材 role、priority、usage、cropHint。
+- templateRecommendation.templateId 只能是 cover-copy、mood-poster、article-longform 之一。
+- titlePlan.titleLines 必须断行，不超过 4 行；highlightWords 必须来自标题或活动关键词。
+- cover-copy 和 mood-poster 的首图/海报只使用一张主图，不要规划作品缩略图拼贴。
+- article-longform 的图片必须和 longImageSections 对应，过程稿放创作过程，最终作品放作品成果。
+- xiaohongshuPlan.pagePlan 每个对象必须包含：
+  - page: number
+  - pageType: string
+  - title: string
+  - text: string
+  - assetIds: string[]
+  - designNote: string
+- 不允许返回 {"pageType":"..."} 这种缺少 page、title、text、assetIds、designNote 的 pagePlan 对象。
+- wechatPlan.longImageSections 每项必须有 order 和 sectionTitle。
+- xiaohongshuPlan.pagePlan 每项必须有 page 和 title。
+- contentPlan、assetPlan、wechatPlan、xiaohongshuPlan 里的所有数组项都不能缺关键字段。
 
 禁止：
 - 不要输出 Markdown。
