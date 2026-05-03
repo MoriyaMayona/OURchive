@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Avatar, PageFrame, SimpleHeader } from "@/components/ourchive";
 import { archiveSummary, avatarImages, coreActivity } from "@/lib/mockData";
+import { loadPendingActivity, type ChatDetectedPendingActivity } from "@/lib/pendingActivity";
 import { reimuBirthdayImages, reimuBirthdayWorks } from "@/lib/reimuBirthdayAssets";
 
 type Participant = {
@@ -331,6 +333,29 @@ let hasJoinedActivityInRuntime = false;
 let activityRecordGeneratedInRuntime = false;
 
 export default function ActivityPage() {
+  return (
+    <Suspense fallback={<ActivityPageLoading />}>
+      <ActivityPageContent />
+    </Suspense>
+  );
+}
+
+function ActivityPageLoading() {
+  return (
+    <PageFrame>
+      <SimpleHeader title="活动详情" backHref="/" backLabel="返回群聊" right={<span className="text-xs text-slate-400">群小记从群聊识别创建</span>} />
+      <main className="min-h-[calc(100vh-96px)] bg-[#edf5fb] p-6">
+        <section className="rounded-[18px] bg-white p-6 shadow-sm">
+          <p className="text-sm font-semibold text-sky-600">正在读取活动信息...</p>
+        </section>
+      </main>
+    </PageFrame>
+  );
+}
+
+function ActivityPageContent() {
+  const searchParams = useSearchParams();
+  const requestedActivityId = searchParams.get("activity") || "reimu-birthday";
   const [hasJoined, setHasJoined] = useState(hasJoinedActivityInRuntime);
   const [generated, setGenerated] = useState(activityRecordGeneratedInRuntime);
   const [visibility, setVisibility] = useState<MessageVisibility>("public");
@@ -338,6 +363,29 @@ export default function ActivityPage() {
   const [publicPresetSent, setPublicPresetSent] = useState(false);
   const [adminPresetSent, setAdminPresetSent] = useState(false);
   const [discussionMessages, setDiscussionMessages] = useState<ActivityMessage[]>(activityMessages);
+  const [pendingActivity, setPendingActivity] = useState<ChatDetectedPendingActivity | null>(null);
+
+  useEffect(() => {
+    if (!requestedActivityId.startsWith("detected-")) {
+      setPendingActivity(null);
+      return;
+    }
+
+    const stored = loadPendingActivity();
+    setPendingActivity(stored?.id === requestedActivityId ? stored : null);
+  }, [requestedActivityId]);
+
+  const displayActivity = useMemo(
+    () => ({
+      id: pendingActivity?.id || requestedActivityId,
+      title: pendingActivity?.title || coreActivity.title,
+      time: pendingActivity?.time || coreActivity.time,
+      format: pendingActivity?.format || coreActivity.format,
+      description: pendingActivity?.description || coreActivity.description,
+      isPending: Boolean(pendingActivity),
+    }),
+    [pendingActivity, requestedActivityId],
+  );
 
   function sendMessage() {
     const content = inputValue.trim();
@@ -372,6 +420,7 @@ export default function ActivityPage() {
   }
 
   const displayParticipants = hasJoined ? [adminUser, ...participants] : participants;
+  const displayWorks = displayActivity.isPending ? [] : reimuBirthdayWorks;
 
   return (
     <PageFrame>
@@ -383,10 +432,17 @@ export default function ActivityPage() {
               <div>
                 <div className="mb-3 flex gap-2">
                   <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">进行中</span>
-                  <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">已发布</span>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${displayActivity.isPending ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"}`}>
+                    {displayActivity.isPending ? "待管理员确认" : "已发布"}
+                  </span>
                 </div>
-                <h1 className="text-2xl font-bold text-slate-950">{coreActivity.title}</h1>
-                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">{coreActivity.description}</p>
+                <h1 className="text-2xl font-bold text-slate-950">{displayActivity.title}</h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">{displayActivity.description}</p>
+                {displayActivity.isPending ? (
+                  <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
+                    这是从群聊识别到的新活动草稿，主题、时间、参与方式和投稿规则仍需要管理员确认。
+                  </p>
+                ) : null}
               </div>
               <button
                 disabled={hasJoined}
@@ -403,11 +459,11 @@ export default function ActivityPage() {
             <div className="mt-6 grid gap-3 md:grid-cols-2">
               <div className="rounded-[14px] bg-white/80 p-4 text-sm">
                 <p className="text-xs text-slate-400">时间</p>
-                <p className="mt-1 font-semibold text-slate-800">{coreActivity.time}</p>
+                <p className="mt-1 font-semibold text-slate-800">{displayActivity.time}</p>
               </div>
               <div className="rounded-[14px] bg-white/80 p-4 text-sm">
                 <p className="text-xs text-slate-400">形式</p>
-                <p className="mt-1 font-semibold text-slate-800">{coreActivity.format}</p>
+                <p className="mt-1 font-semibold text-slate-800">{displayActivity.format}</p>
               </div>
             </div>
           </section>
@@ -433,10 +489,11 @@ export default function ActivityPage() {
           <section className="mt-5 rounded-[18px] bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-bold text-slate-950">创作成果</h2>
-              <span className="text-sm text-slate-500">{reimuBirthdayWorks.length} 件作品与过程稿</span>
+              <span className="text-sm text-slate-500">{displayWorks.length} 件作品与过程稿</span>
             </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {reimuBirthdayWorks.map((work) => (
+            {displayWorks.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {displayWorks.map((work) => (
                 <article key={work.title} className="overflow-hidden rounded-[16px] border border-slate-100 bg-slate-50">
                   <div
                     className={`grid h-36 place-items-center bg-gradient-to-br ${work.gradient} bg-cover bg-center p-4 text-center`}
@@ -449,8 +506,13 @@ export default function ActivityPage() {
                     <p className="mt-1 text-xs font-semibold text-sky-600">{work.author}｜{work.type}</p>
                   </div>
                 </article>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                暂无投稿。成员可以先在讨论区确认规则，再继续上传作品。
+              </p>
+            )}
           </section>
 
           <section className="mt-5 flex h-[560px] flex-col overflow-hidden rounded-[18px] bg-[#edf5fb] shadow-sm ring-1 ring-white/80">
@@ -527,10 +589,10 @@ export default function ActivityPage() {
               </button>
             ) : (
               <div className="mt-4 grid grid-cols-2 gap-2">
-                <Link href="/archive?activity=reimu-birthday" className="rounded-lg bg-emerald-50 px-3 py-2 text-center text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
+                <Link href={`/archive/${displayActivity.id}`} className="rounded-lg bg-emerald-50 px-3 py-2 text-center text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
                   查看活动记录
                 </Link>
-                <Link href="/promo?activity=reimu-birthday" className="rounded-lg bg-violet-50 px-3 py-2 text-center text-sm font-semibold text-violet-700 hover:bg-violet-100">
+                <Link href={`/promo?activity=${encodeURIComponent(displayActivity.id)}`} className="rounded-lg bg-violet-50 px-3 py-2 text-center text-sm font-semibold text-violet-700 hover:bg-violet-100">
                   整理宣发素材
                 </Link>
               </div>

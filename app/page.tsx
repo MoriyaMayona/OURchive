@@ -504,8 +504,8 @@ function RightCommunityPanel({
   worksUnread: boolean;
 }) {
   const pinnedActivityHref = pinnedActivity.id
-    ? `/archive/${pinnedActivity.id}${pinnedActivity.isDetected || pinnedActivity.source === "chat-detected" ? "?source=chat-detected" : ""}`
-    : "/archive/reimu-birthday";
+    ? `/activity?activity=${encodeURIComponent(pinnedActivity.id)}${pinnedActivity.isDetected || pinnedActivity.source === "chat-detected" ? "&source=chat-detected" : ""}`
+    : "/activity?activity=reimu-birthday";
 
   return (
     <aside className="flex min-h-0 w-[330px] shrink-0 flex-col gap-4 overflow-y-auto border-l border-slate-200 bg-white p-4 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin]">
@@ -530,7 +530,7 @@ function RightCommunityPanel({
               <span className="mt-2 block text-xs text-slate-400">点击重新打开群小记活动确认</span>
             </button>
             <Link
-              href="/archive/reimu-birthday"
+              href="/activity?activity=reimu-birthday"
               onClick={onActivityPreviewOpen}
               className="inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-sky-600 shadow-sm hover:bg-sky-50"
             >
