@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
-import { getDefaultPromoDraft, loadPromoDraft, subscribePromoDraft, type PromoDraftAsset } from "@/lib/promoDraft";
+import { getDefaultPromoDraft, loadPromoDraft, savePromoDraft, subscribePromoDraft, type PromoDraftAsset } from "@/lib/promoDraft";
 import {
   getPromoCopy,
   promoPlatforms,
@@ -15,7 +15,7 @@ import {
   type PromoWork,
 } from "@/lib/promoData";
 import { getPromoActivity } from "@/lib/promoActivities";
-import { mapPromoPlatformToLayoutPlatform, resolveTemplateId, type AssetPlanItem, type LayoutPlan } from "@/lib/promoLayoutPlan";
+import { mapPromoPlatformToLayoutPlatform, resolveTemplateId, type AssetPlanItem, type ContentSection, type LayoutPlan } from "@/lib/promoLayoutPlan";
 import { reimuBirthdayImages } from "@/lib/reimuBirthdayAssets";
 
 const platformSet = new Set<PromoPlatform>(["QQ空间", "小红书", "Lofter", "公众号"]);
@@ -130,6 +130,123 @@ function getBodyParagraphs(body: string) {
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
     .slice(0, 4);
+}
+
+function splitTitleLines(title: string): string[] {
+  const cleanTitle = title.replace(/\s+/g, " ").trim();
+  if (!cleanTitle) return [];
+
+  const chunks = cleanTitle
+    .split(/([，。！？、；：,.!?;:｜|—-]|\s+)/)
+    .reduce<string[]>((parts, part) => {
+      const text = part.trim();
+      if (!text) return parts;
+      const last = parts[parts.length - 1] ?? "";
+      if (/^[，。！？、；：,.!?;:｜|—-]$/.test(text) && last) {
+        parts[parts.length - 1] = `${last}${text}`;
+      } else {
+        parts.push(text);
+      }
+      return parts;
+    }, []);
+
+  const lines: string[] = [];
+  let current = "";
+  chunks.forEach((chunk) => {
+    const next = current ? `${current}${chunk}` : chunk;
+    if (next.length <= 12) {
+      current = next;
+      return;
+    }
+    if (current) lines.push(current);
+    current = chunk;
+  });
+  if (current) lines.push(current);
+
+  const normalized = lines.flatMap((line) => {
+    if (line.length <= 14) return [line];
+    const result: string[] = [];
+    for (let index = 0; index < line.length; index += 10) {
+      result.push(line.slice(index, index + 10));
+    }
+    return result;
+  });
+
+  if (normalized.length <= 4) return normalized;
+  return [...normalized.slice(0, 3), normalized.slice(3).join("")].slice(0, 4);
+}
+
+function extractHighlightWords(title: string): string[] {
+  const candidates = [
+    ...Array.from(title.matchAll(/\d+\s*(?:h|H|小时|天|人|张|篇|份)?/g)).map((match) => match[0].replace(/\s+/g, "")),
+    ..."图文接力 合辑 生日 校园 明信片 故事接龙 水灯节 有爱 完成 神仙 回顾 共创".split(" ").filter((word) => title.includes(word)),
+  ];
+  return Array.from(new Set(candidates.filter(Boolean))).slice(0, 3);
+}
+
+function parseTags(input: string): string[] {
+  return Array.from(
+    new Set(
+      input
+        .split(/[\s,，#]+/)
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function splitBodySections(body: string): { heading: string; text: string }[] {
+  const headings = ["活动缘起", "创作过程", "作品成果", "经验沉淀"];
+  let paragraphs = body
+    .split(/\n\s*\n|\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  if (paragraphs.length < 3) {
+    paragraphs = body
+      .split(/(?<=[。！？!?])\s*/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean);
+  }
+
+  return paragraphs.slice(0, 4).map((text, index) => ({
+    heading: headings[index] ?? `段落 ${index + 1}`,
+    text,
+  }));
+}
+
+function buildDerivedContentPlan(body: string, fallbackContentPlan: ContentSection[]): ContentSection[] {
+  const sections = splitBodySections(body);
+  if (sections.length < 2) return fallbackContentPlan;
+
+  const baseSections = fallbackContentPlan.length > 0 ? fallbackContentPlan : [];
+  return sections.map((section, index) => {
+    const fallback = baseSections[index] ?? baseSections[baseSections.length - 1];
+    return {
+      id: fallback?.id ?? `derived-content-${index + 1}`,
+      sectionType: fallback?.sectionType ?? "summary",
+      heading: section.heading,
+      text: section.text,
+      bullets: fallback?.bullets ?? [],
+      highlightSentence: fallback?.highlightSentence,
+      relatedAssetIds: fallback?.relatedAssetIds ?? [],
+      layoutHint: fallback?.layoutHint ?? "text-only",
+      pageSuggestion: fallback?.pageSuggestion ?? index + 1,
+    };
+  });
+}
+
+async function waitForImages(root: HTMLElement) {
+  const images = Array.from(root.querySelectorAll("img"));
+  await Promise.all(
+    images.map((img) => {
+      if (img.complete) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+      });
+    }),
+  );
 }
 
 function getAssetSlotId(asset: PromoDraftAsset, index: number) {
@@ -315,9 +432,9 @@ function TemplatePreview({
           </div>
           <div className="relative z-10">
             <h2 className="text-5xl font-black leading-tight text-white">{renderTitleLines(layoutPlan, title)}</h2>
-            {layoutPlan.titlePlan.subtitle ? <p className="mt-5 max-w-[18rem] text-sm font-semibold leading-7 text-white/88">{layoutPlan.titlePlan.subtitle}</p> : null}
+            {layoutPlan.titlePlan.subtitle ? <p className="mt-5 max-w-[18rem] text-sm font-semibold leading-7" style={{ color: "rgba(255,255,255,0.88)" }}>{layoutPlan.titlePlan.subtitle}</p> : null}
           </div>
-          <div className="relative z-10 flex items-end justify-between gap-6 text-xs font-bold leading-5 text-white/80">
+          <div className="relative z-10 flex items-end justify-between gap-6 text-xs font-bold leading-5" style={{ color: "rgba(255,255,255,0.80)" }}>
             <span>{template.name}</span>
             <span className="text-right">{heroAsset?.title ?? "主视觉"}</span>
           </div>
@@ -389,7 +506,7 @@ function TemplatePreview({
           style={getBackgroundImageStyle(heroAsset?.image, exportGradients[0])}
         >
           <div className="absolute inset-0" style={{ backgroundColor: "rgba(255,255,255,0.28)" }} />
-          <div className="relative z-10 w-full rounded-md bg-white/86 p-4 text-left">
+          <div className="relative z-10 w-full rounded-md p-4 text-left" style={{ backgroundColor: "rgba(255,255,255,0.86)" }}>
             <p className="text-xs font-black" style={{ color: "#2563EB" }}>QQ空间动态｜{activityTime}</p>
             <h2 className="mt-2 text-3xl font-black leading-tight">{renderTitleLines(layoutPlan, title)}</h2>
           </div>
@@ -423,8 +540,8 @@ function TemplatePreview({
               <span>{activityTime}</span>
             </div>
             <div className="relative">
-              <div className="absolute -left-3 -top-7 rotate-[-8deg] rounded-sm px-4 py-1 text-xs font-black" style={{ backgroundColor: "#FDE68A", color: "#92400E" }}>OURchive</div>
-              <h2 className="rounded-md bg-white/88 p-5 text-5xl font-black leading-tight shadow-sm">{renderTitleLines(layoutPlan, title)}</h2>
+              <div className="absolute -left-3 -top-7 rounded-sm px-4 py-1 text-xs font-black" style={{ backgroundColor: "#FDE68A", color: "#92400E" }}>OURchive</div>
+              <h2 className="rounded-md p-5 text-5xl font-black leading-tight shadow-sm" style={{ backgroundColor: "rgba(255,255,255,0.88)" }}>{renderTitleLines(layoutPlan, title)}</h2>
               <div className="mt-4 flex flex-wrap gap-2">
                 {primaryTags.map((tag, index) => (
                   <span key={`xhs-scrap-tag-${tag || "tag"}-${index}`} className="rounded-full px-3 py-1 text-xs font-black" style={{ backgroundColor: "#FCE7F3", color: "#BE185D" }}>{tag}</span>
@@ -433,7 +550,7 @@ function TemplatePreview({
             </div>
             <div className="grid grid-cols-2 gap-3">
               {visibleAssets.slice(1, 3).map((asset, index) => (
-                <div key={`xhs-scrap-asset-${asset.id ?? asset.title ?? "asset"}-${index}`} className="rotate-[-2deg] rounded-md bg-white p-2 shadow-sm">
+                <div key={`xhs-scrap-asset-${asset.id ?? asset.title ?? "asset"}-${index}`} className="rounded-md bg-white p-2 shadow-sm">
                   <div className="aspect-[4/3] rounded bg-cover bg-center" style={getBackgroundImageStyle(asset.image, exportGradients[index])} />
                   <p className="mt-2 truncate text-[11px] font-black">{asset.title}</p>
                 </div>
@@ -454,7 +571,7 @@ function TemplatePreview({
         >
           <div className="absolute inset-0" style={{ backgroundColor: "rgba(15,23,42,0.30)" }} />
           <div className="relative z-10">
-            <p className="text-xs font-black tracking-[0.18em] text-white/80">公众号作品展示｜{activityTime}</p>
+            <p className="text-xs font-black tracking-[0.18em]" style={{ color: "rgba(255,255,255,0.80)" }}>公众号作品展示｜{activityTime}</p>
             <h2 className="mt-3 text-4xl font-black leading-tight text-white">{renderTitleLines(layoutPlan, title)}</h2>
           </div>
         </div>
@@ -619,6 +736,7 @@ function PromoEditorContent() {
   const [downloadError, setDownloadError] = useState("");
   const [downloadStatus, setDownloadStatus] = useState("");
   const previewRef = useRef<HTMLDivElement>(null);
+  const lastSavedDraftSignatureRef = useRef("");
   const layoutPlan = activeDraft.layoutPlan;
   const visibleTemplates = useMemo(() => getVisibleTemplates(draftPlatform), [draftPlatform]);
   const recommendedTemplateId = resolveTemplateId(layoutPlan.templateRecommendation.templateId, mapPromoPlatformToLayoutPlatform(draftPlatform)) || getRecommendedTemplateId(draftPlatform);
@@ -631,6 +749,46 @@ function PromoEditorContent() {
   const tags = tagsOverride ?? activeDraft.tags ?? initialCopy.tags;
   const layoutAdvice = layoutAdviceOverride ?? activeDraft.layoutAdvice ?? initialCopy.layout;
   const matchedAssets = activeDraft.matchedAssets.length > 0 ? activeDraft.matchedAssets : defaultDraft.matchedAssets;
+  const derivedLayoutPlan = useMemo(() => {
+    const titleLines = splitTitleLines(title);
+    const highlightWords = extractHighlightWords(title);
+    const contentPlan = buildDerivedContentPlan(body, layoutPlan.contentPlan);
+    const bodySections = splitBodySections(body);
+
+    return {
+      ...layoutPlan,
+      titlePlan: {
+        ...layoutPlan.titlePlan,
+        rawTitle: title,
+        titleLines: titleLines.length > 0 ? titleLines : layoutPlan.titlePlan.titleLines,
+        highlightWords: highlightWords.length > 0 ? highlightWords : layoutPlan.titlePlan.highlightWords,
+      },
+      contentPlan,
+      xiaohongshuPlan: layoutPlan.xiaohongshuPlan
+        ? {
+            ...layoutPlan.xiaohongshuPlan,
+            noteStructure: {
+              ...layoutPlan.xiaohongshuPlan.noteStructure,
+              hook: bodySections[0]?.text ?? layoutPlan.xiaohongshuPlan.noteStructure.hook,
+            },
+            hashtagStrategy: {
+              ...layoutPlan.xiaohongshuPlan.hashtagStrategy,
+              primaryTags: tags.slice(0, 5),
+            },
+          }
+        : undefined,
+      wechatPlan: layoutPlan.wechatPlan
+        ? {
+            ...layoutPlan.wechatPlan,
+            longImageSections: layoutPlan.wechatPlan.longImageSections.map((section, index) => ({
+              ...section,
+              sectionTitle: contentPlan[index]?.heading ?? section.sectionTitle,
+              text: contentPlan[index]?.text ?? section.text,
+            })),
+          }
+        : undefined,
+    } satisfies LayoutPlan;
+  }, [body, layoutPlan, tags, title]);
   const draftStatus = storedDraft ? "已载入小记宣发草稿" : "当前使用默认示例文案";
 
   useEffect(() => {
@@ -640,6 +798,44 @@ function PromoEditorContent() {
   useEffect(() => {
     setAssetOverrides({});
   }, [activity.id]);
+
+  useEffect(() => {
+    const hasTextEdit = titleOverride !== null || bodyOverride !== null || tagsOverride !== null || layoutAdviceOverride !== null;
+    if (!hasTextEdit) return;
+
+    const signature = JSON.stringify({
+      body,
+      layoutAdvice,
+      layoutPlan: derivedLayoutPlan,
+      tags,
+      title,
+    });
+    if (signature === lastSavedDraftSignatureRef.current) return;
+
+    const timer = window.setTimeout(() => {
+      lastSavedDraftSignatureRef.current = signature;
+      savePromoDraft({
+        ...activeDraft,
+        activityId: activity.id,
+        platform: draftPlatform,
+        style: activeDraft.style || initialStyle,
+        title,
+        body,
+        tags,
+        layoutAdvice,
+        matchedAssets,
+        layoutPlan: derivedLayoutPlan,
+        activity: {
+          id: activity.id,
+          name: activity.name,
+          time: activity.time,
+        },
+        updatedAt: new Date().toISOString(),
+      });
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [activeDraft, activity.id, activity.name, activity.time, body, bodyOverride, derivedLayoutPlan, draftPlatform, initialStyle, layoutAdvice, layoutAdviceOverride, matchedAssets, tags, tagsOverride, title, titleOverride]);
 
   const selectedTemplate = useMemo(
     () => visibleTemplates.find((template) => template.id === selectedTemplateId) ?? visibleTemplates[0] ?? promoTemplates[0],
@@ -656,8 +852,8 @@ function PromoEditorContent() {
     [activity.images, activity.works, defaultDraft.matchedAssets, matchedAssets],
   );
   const templateAssets = useMemo(() => {
-    const plannedAssets = getPlannedAssets(layoutPlan, matchedAssets);
-    const baseAssets = (plannedAssets.length > 0 ? plannedAssets : getTemplateAssets(activity.id, selectedTemplate, matchedAssets)).slice(0, Math.max(selectedTemplate.imageSlots, layoutPlan.platform === "wechat" ? 4 : 1));
+    const plannedAssets = getPlannedAssets(derivedLayoutPlan, matchedAssets);
+    const baseAssets = (plannedAssets.length > 0 ? plannedAssets : getTemplateAssets(activity.id, selectedTemplate, matchedAssets)).slice(0, Math.max(selectedTemplate.imageSlots, derivedLayoutPlan.platform === "wechat" ? 4 : 1));
     return baseAssets.map((asset, index) => {
       const slotId = getAssetSlotId(asset, index);
       return resolveAssetForSlot({
@@ -667,39 +863,48 @@ function PromoEditorContent() {
         slotId,
       });
     });
-  }, [activity.id, assetLibrary, assetOverrides, layoutPlan, matchedAssets, selectedTemplate]);
+  }, [activity.id, assetLibrary, assetOverrides, derivedLayoutPlan, matchedAssets, selectedTemplate]);
 
   const handleDownloadPNG = useCallback(async () => {
-    if (!previewRef.current || isDownloading) return;
+    if (isDownloading) return;
+    const previewElement = previewRef.current;
+    if (!previewElement) {
+      console.warn("Failed to export PNG: previewRef.current is null");
+      setDownloadError("导出失败，请稍后重试");
+      return;
+    }
 
     setIsDownloading(true);
     setDownloadError("");
     setDownloadStatus("");
 
     try {
+      await waitForImages(previewElement);
       const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(previewRef.current, {
-        backgroundColor: "#ffffff",
+      const canvas = await html2canvas(previewElement, {
+        backgroundColor: null,
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         logging: false,
       });
       const image = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = image;
-      link.download = "reimu-birthday-promo.png";
+      link.download = `${activity.id}-${selectedTemplate.id}-promo.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       setDownloadStatus("PNG 已保存");
     } catch (error) {
       console.error("Failed to export PNG", error);
-      setDownloadError("导出失败，请稍后重试。");
-      alert("导出失败，请稍后重试");
+      setDownloadError("导出失败，请稍后重试");
     } finally {
       setIsDownloading(false);
     }
-  }, [isDownloading]);
+  }, [activity.id, isDownloading, selectedTemplate.id]);
+
+  const downloadButtonText = isDownloading ? "正在导出..." : downloadError ? "导出失败，请稍后重试" : downloadStatus || "下载 PNG";
 
   return (
     <div className="h-screen overflow-hidden bg-[#dfeaf5] p-4 text-slate-900">
@@ -721,7 +926,7 @@ function PromoEditorContent() {
             disabled={isDownloading}
             className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {isDownloading ? "正在导出..." : "下载 PNG"}
+            {downloadButtonText}
           </button>
         </header>
 
@@ -760,12 +965,13 @@ function PromoEditorContent() {
                 boxShadow: "none",
               }}
             >
-              <TemplatePreview assets={templateAssets} body={body} layoutPlan={layoutPlan} tags={tags} template={selectedTemplate} title={title} activityTime={activity.time} />
+              <TemplatePreview assets={templateAssets} body={body} layoutPlan={derivedLayoutPlan} tags={tags} template={selectedTemplate} title={title} activityTime={activity.time} />
             </div>
           </section>
 
           <aside className="min-h-0 overflow-y-auto rounded-[18px] bg-white p-4 shadow-sm [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin]">
             <h2 className="text-base font-bold text-slate-950">文案草稿</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">修改文案后，模板会自动重新断行并更新预览。</p>
             {downloadError ? <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">{downloadError}</p> : null}
             {downloadStatus ? <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">{downloadStatus}</p> : null}
             <label className="mt-4 block text-xs font-bold text-slate-500">
@@ -788,7 +994,7 @@ function PromoEditorContent() {
               标签
               <textarea
                 value={tags.join(" ")}
-                onChange={(event) => setTagsOverride(event.target.value.split(/\s+/).filter(Boolean))}
+                onChange={(event) => setTagsOverride(parseTags(event.target.value))}
                 className="mt-2 min-h-20 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700 outline-none transition focus:border-sky-300 focus:bg-white"
               />
             </label>
@@ -804,14 +1010,14 @@ function PromoEditorContent() {
               <p className="text-xs font-bold text-sky-800">小记排版计划</p>
               <div className="mt-2 space-y-1.5 text-xs leading-5 text-slate-600">
                 <p>推荐模板：{selectedTemplate.name}</p>
-                <p>标题断行：{layoutPlan.titlePlan.titleLines.join(" / ")}</p>
-                <p>重点词：{layoutPlan.titlePlan.highlightWords.join(" / ") || "无"}</p>
-                <p>主视觉：{getHeroAsset(layoutPlan, templateAssets)?.title ?? "未匹配"}</p>
-                <p>图片角色：{layoutPlan.assetPlan.slice(0, 5).map((asset) => `${asset.title || "素材"}=${asset.role || "support"}`).join("；")}</p>
-                {layoutPlan.xiaohongshuPlan ? (
+                <p>标题断行：{derivedLayoutPlan.titlePlan.titleLines.join(" / ")}</p>
+                <p>重点词：{derivedLayoutPlan.titlePlan.highlightWords.join(" / ") || "无"}</p>
+                <p>主视觉：{getHeroAsset(derivedLayoutPlan, templateAssets)?.title ?? "未匹配"}</p>
+                <p>图片角色：{derivedLayoutPlan.assetPlan.slice(0, 5).map((asset) => `${asset.title || "素材"}=${asset.role || "support"}`).join("；")}</p>
+                {derivedLayoutPlan.xiaohongshuPlan ? (
                   <p>
                     正文结构：
-                    {layoutPlan.xiaohongshuPlan.pagePlan
+                    {derivedLayoutPlan.xiaohongshuPlan.pagePlan
                       .map((page, index) => {
                         const { pageNumber, pageTitle } = getSafeXiaohongshuPage(page, index);
                         return `P${pageNumber} ${pageTitle}`;
@@ -819,15 +1025,15 @@ function PromoEditorContent() {
                       .join(" / ")}
                   </p>
                 ) : null}
-                {layoutPlan.wechatPlan ? <p>正文结构：{layoutPlan.wechatPlan.longImageSections.map((section, index) => getSafeWechatSection(section, index).sectionTitle).join(" / ")}</p> : null}
+                {derivedLayoutPlan.wechatPlan ? <p>正文结构：{derivedLayoutPlan.wechatPlan.longImageSections.map((section, index) => getSafeWechatSection(section, index).sectionTitle).join(" / ")}</p> : null}
               </div>
             </section>
-            {layoutPlan.xiaohongshuPlan ? (
+            {derivedLayoutPlan.xiaohongshuPlan ? (
               <section className="mt-4 rounded-xl bg-rose-50 p-3">
                 <p className="text-xs font-bold text-rose-800">小红书正文分页建议</p>
                 <div className="mt-2 space-y-2 text-xs leading-5 text-slate-600">
-                  <p className="font-semibold text-slate-800">{layoutPlan.xiaohongshuPlan.noteStructure.hook}</p>
-                  {layoutPlan.xiaohongshuPlan.pagePlan.map((page, index) => {
+                  <p className="font-semibold text-slate-800">{derivedLayoutPlan.xiaohongshuPlan.noteStructure.hook}</p>
+                  {derivedLayoutPlan.xiaohongshuPlan.pagePlan.map((page, index) => {
                     const { pageNumber, pageTitle, pageNote } = getSafeXiaohongshuPage(page, index);
                     return (
                       <div key={`xhs-page-${pageNumber}-${page.pageType ?? "text-card"}-${page.title ?? "untitled"}-${index}`} className="rounded-lg bg-white/70 px-3 py-2">
@@ -865,7 +1071,7 @@ function PromoEditorContent() {
                         }}
                         className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700 outline-none transition focus:border-sky-300 focus:bg-white"
                       >
-                        <option value="">渐变占位</option>
+                        <option value="">娓愬彉鍗犱綅</option>
                         {assetLibrary.map((libraryAsset, assetIndex) => (
                           <option key={`asset-option-${getAssetLibraryItemId(libraryAsset, assetIndex)}-${assetIndex}`} value={getAssetLibraryItemId(libraryAsset, assetIndex)}>
                             {libraryAsset.title}{libraryAsset.author ? `｜${libraryAsset.author}` : ""}{libraryAsset.type ? `｜${libraryAsset.type}` : ""}

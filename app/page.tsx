@@ -22,10 +22,12 @@ import {
   subscribeUploadedWorks,
   type UploadedWork,
 } from "@/lib/uploadedWorks";
+import { createPendingActivityId, savePendingActivity } from "@/lib/pendingActivity";
 import { reimuBirthdayImages } from "@/lib/reimuBirthdayAssets";
 
 type ApprovalState = "pending" | "postponed" | "pinned" | "ignored";
 type ActivityPreview = {
+  id?: string;
   title: string;
   time: string;
   format: string;
@@ -38,6 +40,7 @@ type ActivityPreview = {
 
 let approvalHandledInRuntime = false;
 let approvalStateInRuntime: ApprovalState = "pending";
+let uploadedWorksClearedForReloadInRuntime = false;
 const unreadStateInRuntime = {
   works: true,
   archive: true,
@@ -117,6 +120,7 @@ function detectActivityIntent(combinedText: string, rawMessage: string) {
   const title = extractActivityTitle(combinedText);
   const time = extractActivityTime(combinedText);
   return {
+    id: createPendingActivityId(),
     title,
     time,
     format: "共创活动",
@@ -499,6 +503,10 @@ function RightCommunityPanel({
   recentWorks: SidebarWork[];
   worksUnread: boolean;
 }) {
+  const pinnedActivityHref = pinnedActivity.id
+    ? `/archive/${pinnedActivity.id}${pinnedActivity.isDetected || pinnedActivity.source === "chat-detected" ? "?source=chat-detected" : ""}`
+    : "/archive/reimu-birthday";
+
   return (
     <aside className="flex min-h-0 w-[330px] shrink-0 flex-col gap-4 overflow-y-auto border-l border-slate-200 bg-white p-4 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin]">
       <section className="relative rounded-[14px] bg-gradient-to-br from-sky-50 to-violet-50 p-4">
@@ -507,7 +515,7 @@ function RightCommunityPanel({
           <h2 className="font-bold text-slate-950">活动预告</h2>
         </div>
         {approvalState === "pinned" ? (
-          <Link href="/activity" onClick={onActivityPreviewOpen} className="block rounded-xl p-1 transition hover:bg-white/45">
+          <Link href={pinnedActivityHref} onClick={onActivityPreviewOpen} className="block rounded-xl p-1 transition hover:bg-white/45">
             <p className="text-sm font-semibold text-slate-800">{pinnedActivity.title}</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">{pinnedActivity.description}</p>
             <span className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-sky-600 shadow-sm">
@@ -522,7 +530,7 @@ function RightCommunityPanel({
               <span className="mt-2 block text-xs text-slate-400">点击重新打开群小记活动确认</span>
             </button>
             <Link
-              href="/activity"
+              href="/archive/reimu-birthday"
               onClick={onActivityPreviewOpen}
               className="inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-sky-600 shadow-sm hover:bg-sky-50"
             >
@@ -597,6 +605,7 @@ export default function Home() {
   const [showApproval, setShowApproval] = useState(!approvalHandledInRuntime);
   const [pendingDetectedActivity, setPendingDetectedActivity] = useState<ActivityPreview | null>(null);
   const [pinnedActivity, setPinnedActivity] = useState<ActivityPreview>({
+    id: "reimu-birthday",
     title: coreActivity.title,
     time: coreActivity.time,
     format: coreActivity.format,
@@ -626,10 +635,12 @@ export default function Home() {
   }, [uploadedWorksSnapshot]);
 
   useEffect(() => {
+    if (uploadedWorksClearedForReloadInRuntime) return;
     const [navigation] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
     if (navigation?.type === "reload") {
       clearUploadedWorks();
     }
+    uploadedWorksClearedForReloadInRuntime = true;
   }, []);
 
   useEffect(() => {
@@ -802,7 +813,7 @@ export default function Home() {
                     setShowToast(true);
                   }}
                   onApprove={(activity) => {
-                    setPinnedActivity(activity);
+                    setPinnedActivity({ ...activity, id: activity.id ?? "reimu-birthday" });
                     handleApprovalHandled("pinned");
                     setToast("活动已置顶到右侧预告");
                     setShowToast(true);
@@ -820,7 +831,13 @@ export default function Home() {
                     setShowToast(true);
                   }}
                   onApprove={(activity) => {
-                    setPinnedActivity(activity);
+                    const pendingActivity = savePendingActivity(activity);
+                    setPinnedActivity({
+                      ...activity,
+                      id: pendingActivity.id,
+                      source: pendingActivity.source,
+                      isDetected: true,
+                    });
                     approvalHandledInRuntime = true;
                     approvalStateInRuntime = "pinned";
                     setApprovalState("pinned");

@@ -4,6 +4,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Avatar, PageFrame, SimpleHeader } from "@/components/ourchive";
 import { avatarImages, coreActivity, works, type Work } from "@/lib/mockData";
+import { archiveWorkAssets } from "@/lib/archiveWorks";
 import { myProjectsWorks } from "@/lib/myProjectsManifest";
 import { reimuBirthdayWorks } from "@/lib/reimuBirthdayAssets";
 import { getUploadedWorksServerSnapshot, getUploadedWorksSnapshot, parseUploadedWorksSnapshot, subscribeUploadedWorks, uploadedWorkToWork } from "@/lib/uploadedWorks";
@@ -112,6 +113,33 @@ const reimuBirthdayWallWorks: Work[] = reimuBirthdayWorks.map((work, index) => (
   sourceType: "activity-generated",
 }));
 
+const archiveWallWorks: Work[] = archiveWorkAssets.map((asset) => ({
+  id: asset.id,
+  title: asset.title,
+  type: asset.type,
+  author: asset.author,
+  authorId: asset.authorId,
+  avatar: asset.avatar,
+  avatarSrc:
+    asset.authorId === "motuan"
+      ? avatarImages.motuan
+      : asset.authorId === "weiyang"
+        ? avatarImages.weiyang
+        : asset.authorId === "ali"
+          ? avatarImages.ali
+          : undefined,
+  activity: asset.activityTitle,
+  comments: asset.comments.length,
+  likes: asset.likes,
+  commentList: asset.comments,
+  tags: [...asset.tags],
+  gradient: asset.gradient,
+  image: asset.image,
+  description: asset.description,
+  activityId: asset.activityId,
+  sourceType: "activity-generated",
+}));
+
 export default function WorksPage() {
   const [filter, setFilter] = useState("全部");
   const uploadedWorksSnapshot = useSyncExternalStore(subscribeUploadedWorks, getUploadedWorksSnapshot, getUploadedWorksServerSnapshot);
@@ -119,12 +147,14 @@ export default function WorksPage() {
     const uploaded = parseUploadedWorksSnapshot(uploadedWorksSnapshot).map(uploadedWorkToWork);
     const uploadedIds = new Set(uploaded.map((work) => work.id));
     const reimuTitles = new Set(reimuBirthdayWallWorks.map((work) => work.title));
+    const archiveTitles = new Set(archiveWallWorks.map((work) => work.title));
     const reimuWorks = reimuBirthdayWallWorks.filter((work) => !uploadedIds.has(work.id));
-    const knownIds = new Set([...uploadedIds, ...reimuWorks.map((work) => work.id)]);
+    const archiveWorksFiltered = archiveWallWorks.filter((work) => !uploadedIds.has(work.id));
+    const knownIds = new Set([...uploadedIds, ...reimuWorks.map((work) => work.id), ...archiveWorksFiltered.map((work) => work.id)]);
     const myProjects = myProjectsWorks.filter((work) => !knownIds.has(work.id));
     const finalKnownIds = new Set([...knownIds, ...myProjects.map((work) => work.id)]);
-    const otherDefaultWorks = works.filter((work) => !finalKnownIds.has(work.id) && !reimuTitles.has(work.title));
-    return [...uploaded, ...reimuWorks, ...myProjects, ...otherDefaultWorks];
+    const otherDefaultWorks = works.filter((work) => !finalKnownIds.has(work.id) && !reimuTitles.has(work.title) && !archiveTitles.has(work.title));
+    return [...uploaded, ...reimuWorks, ...archiveWorksFiltered, ...myProjects, ...otherDefaultWorks];
   }, [uploadedWorksSnapshot]);
   const shown = filter === "全部" ? allWorks : allWorks.filter((work) => work.type === filter);
 

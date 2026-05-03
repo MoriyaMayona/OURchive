@@ -86,11 +86,18 @@ export function subscribeUploadedWorks(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => {};
 
   const notify = () => onStoreChange();
+  const notifyWhenVisible = () => {
+    if (document.visibilityState === "visible") notify();
+  };
   window.addEventListener("storage", notify);
   window.addEventListener(uploadedWorksChangedEvent, notify);
+  window.addEventListener("focus", notify);
+  document.addEventListener("visibilitychange", notifyWhenVisible);
   return () => {
     window.removeEventListener("storage", notify);
     window.removeEventListener(uploadedWorksChangedEvent, notify);
+    window.removeEventListener("focus", notify);
+    document.removeEventListener("visibilitychange", notifyWhenVisible);
   };
 }
 

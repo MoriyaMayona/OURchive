@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Avatar, PageFrame } from "@/components/ourchive";
 import { archiveActivities, getArchiveActivity, type ArchiveActivity } from "@/lib/archiveActivities";
+import { PendingArchiveDetail } from "./PendingArchiveDetail";
 
 type ArchiveDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -15,7 +16,10 @@ export default async function ArchiveDetailPage({ params }: ArchiveDetailPagePro
   const { id } = await params;
   const activity = getArchiveActivity(id);
 
-  if (!activity) notFound();
+  if (!activity) {
+    if (id.startsWith("detected-")) return <PendingArchiveDetail requestedId={id} />;
+    notFound();
+  }
 
   return (
     <PageFrame>
